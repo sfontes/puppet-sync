@@ -1,0 +1,38 @@
+h1. Puppet-Sync
+
+This project provides a script to synchronize you manifests from a GIT
+repository to your Puppet master.
+
+h2. Usage
+
+To sync a specific branch, to specific location, from a specific repository run the
+script with the following arguments:
+
+  puppet-sync --branch master \
+              --destination /etc/puppet/environments \
+              --repository ssh+git://git/puppet.git
+
+h2. Git Hook
+
+I usually call this script from a GIT hook. If your GIT repository is located
+on a different server as your Puppet master, you will need to ensure that
+a certain user can login to your Puppet server, without manual interactions.
+
+  # create a puppet-sync user
+  useradd puppet-sync
+
+  # change to the user
+  sudo su - puppet-sync
+
+  # generate a ssh key
+  ssh-keygen -t rsa -b 4096
+
+  # copy the ssh key to your puppet master (where you have already
+  # created the puppet-sync user too ;-))
+  scp ~puppet-sync/.ssh/id_rsa.pub puppet:/home/puppet-sync/.ssh
+
+
+Now you need to add the following line to the Git file:
+
+  echo "sudo -u psync ssh puppet01.in.ixolit.com /usr/local/bin/psync \$branch" >> /git/puppet.git/hooks/post-update
+  echo "exec git-update-server-info" >> /git/puppet.git/hooks/post-update
