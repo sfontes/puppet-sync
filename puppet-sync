@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby1.8
+#!/usr/bin/env ruby
 # Copyright 2010, Stefan Schlesinger <sts@ono.at>
 #
 #
@@ -42,6 +42,7 @@ class PuppetSync
         @options.tmp = "/var/tmp"
         @options.branch = "master"
         @options.verbose = false
+        @options.passenger = false
         @options.repository = "git+ssh://psync@git.in.ixolit.com/srv/git/puppet.git"
         @options.destination = "/etc/puppet/environments"
     end
@@ -95,6 +96,8 @@ class PuppetSync
             execute << "#{git} checkout #{verbose} -b deploy origin/#{branch}"
         end
 
+        execute << "touch .puppet-sync-stamp"
+
         execute << "cd ~"
 
         execute.join(" && ")
@@ -105,16 +108,31 @@ class PuppetSync
         destination = translate_branch_to_dest_dir(@options.branch)
         execute     = []
 
-        # remove the old destination if it still exists
+        # do some sanity checks and remove the the existing
+        # manifest dir if it still exists
         if File.directory?(destination)
-            execute << "rm -rf #{destination}"
+            if File.writeable?(destination)
+                if File.exists?("#{destination}/.puppet-sync-stamp")
+                    execute << "rm -rf #{destination}"
+                else
+                    raise "Error: Manifest dir is not a copy managed by puppet-sync in: #{destination}. Try to remove it manually."
+                end
+
+            else
+                raise "Error: Manifest dir is not writeable."
+            end
         end
 
         # move the new copy to destination
         execute << "mv #{@tmp} #{destination}"
 
-        # touch the restart.txt to restart passenger workers
-        execute << "touch /usr/share/puppet/rack/puppetmasterd/tmp/restart.txt"
+        if @options.passenger
+            # touch the restart.txt to restart passenger workers
+            execute << "touch /usr/share/puppet/rack/puppetmasterd/tmp/restart.txt"
+        else
+            # restart the puppet master daemon
+            execute << "/etc/init.d/puppetmaster restart"
+        end
 
         execute.join(" && ")
     end
@@ -183,6 +201,9 @@ class PuppetSync
             @options.repository = repo
         end
 
+        opts.on("-p", "--passenger", "Restart apache/passenger instead of puppetmaster.") { 
+            @options.passenger = true
+        }
 
         opts.separator "Common options:"
         opts.on('-V', '--version', 'Display the script version.') { output_version ; exit 0; }
