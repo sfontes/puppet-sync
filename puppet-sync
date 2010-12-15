@@ -75,12 +75,15 @@ class PuppetSync
     def sync_branch
         git     = @options.gitcmd
         branch  = @options.branch
-        @tmp     = gen_tmp_dir
+        @tmp    = gen_tmp_dir
 
         verbose = "-q"
         verbose = "" if @options.verbose
 
         execute = []
+
+        execute << "cd #{@options.tmp}"
+
         execute << "#{git} clone -q #{@options.repository} #{@tmp}"
 
         execute << "cd #{@tmp}"
@@ -98,7 +101,7 @@ class PuppetSync
 
         execute << "touch .puppet-sync-stamp"
 
-        execute << "cd ~"
+        execute << "cd #{@options.tmp}"
 
         execute.join(" && ")
     end
@@ -111,7 +114,7 @@ class PuppetSync
         # do some sanity checks and remove the the existing
         # manifest dir if it still exists
         if File.directory?(destination)
-            if File.writeable?(destination)
+            if File.writable?(destination)
                 if File.exists?("#{destination}/.puppet-sync-stamp")
                     execute << "rm -rf #{destination}"
                 else
@@ -131,7 +134,7 @@ class PuppetSync
             execute << "touch /usr/share/puppet/rack/puppetmasterd/tmp/restart.txt"
         else
             # restart the puppet master daemon
-            execute << "/etc/init.d/puppetmaster restart"
+            execute << "sudo /etc/init.d/puppetmaster restart"
         end
 
         execute.join(" && ")
@@ -151,13 +154,6 @@ class PuppetSync
         puts "| Temp: #{name}" if @options.verbose
 
         unless File.directory?(name)
-            begin
-                Dir.mkdir(name)
-            rescue => e
-                puts e.to_s
-                exit!(1)
-            end
-            Dir.new(name)
             return name
         else
           puts "Error: temporary directory already exists: #{name}"
