@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+#
 # Copyright 2010, Stefan Schlesinger <sts@ono.at>
 #
 #
@@ -30,6 +31,9 @@ require 'tmpdir'
 
 class PuppetSync
 
+    class UpdateBranchDestinationDoesntExist < StandardError
+    end
+
     VERSION = "1.0"
 
     def initialize(arguments)
@@ -41,7 +45,7 @@ class PuppetSync
         @options.gitcmd = "/usr/bin/git"
         @options.tmp = "/var/tmp"
         @options.branch = "master"
-        @options.verbose = false
+        @options.verbose = "-q"
         @options.passenger = false
         @options.repository = "git+ssh://psync@git.in.ixolit.com/srv/git/puppet.git"
         @options.destination = "/etc/puppet/environments"
@@ -53,22 +57,28 @@ class PuppetSync
             puts " Branch      : #{@options.branch}"
             puts " Destination : #{@options.destination}"
             puts " Repository  : #{@options.repository}"
-            puts "-----------------------------------------------------------------------------"
+            puts "-----------------------------------------------------------------------------\n"
 
-            cmd = self.sync_branch
-            execute(cmd)
+	    begin
+		cmd = self.update_branch
+                execute(cmd)
+            rescue UpdateBranchDestinationDoesntExist
+                cmd = self.sync_branch
+                execute(cmd)
+            end
 
             cmd = self.finalize
             execute(cmd)
+
         else
-            puts "------------------------------------------------------------ Puppet-Sync"
+            puts "---------------------------------------------------------------- Puppet-Sync"
             puts " ERROR: Invalid options set for puppet-sync."
-            puts "------------------------------------------------------------------------"
+            puts "----------------------------------------------------------------------------"
         end
     end
 
     def execute(cmd)
-        puts "Executing: #{cmd}" if @options.verbose
+        puts "Executing: #{cmd}" if @options.verbose == ""
         %x{#{cmd}}
     end
 
@@ -76,15 +86,13 @@ class PuppetSync
         git     = @options.gitcmd
         branch  = @options.branch
         @tmp    = gen_tmp_dir
-
-        verbose = "-q"
-        verbose = "" if @options.verbose
+        destination = translate_branch_to_dest_dir(@options.branch)
 
         execute = []
 
         execute << "cd #{@options.tmp}"
 
-        execute << "#{git} clone -q #{@options.repository} #{@tmp}"
+        execute << "#{git} clone #{@options.verbose} #{@options.repository} #{@tmp}"
 
         execute << "cd #{@tmp}"
 
@@ -94,22 +102,14 @@ class PuppetSync
 
         # checkout into a local branch rather than a detached HEAD
         if branch == "master"
-            execute << "#{git} checkout #{verbose} -b deploy"
+            execute << "#{git} checkout #{@options.verbose} -b deploy"
         else
-            execute << "#{git} checkout #{verbose} -b deploy origin/#{branch}"
+            execute << "#{git} checkout #{@options.verbose} -b deploy origin/#{branch}"
         end
 
         execute << "touch .puppet-sync-stamp"
 
         execute << "cd #{@options.tmp}"
-
-        execute.join(" && ")
-    end
-
-
-    def finalize
-        destination = translate_branch_to_dest_dir(@options.branch)
-        execute     = []
 
         # do some sanity checks and remove the the existing
         # manifest dir if it still exists
@@ -118,20 +118,49 @@ class PuppetSync
                 if File.exists?("#{destination}/.puppet-sync-stamp")
                     execute << "rm -rf #{destination}"
                 else
-                    raise "Error: Manifest dir is not a copy managed by puppet-sync in: #{destination}. Try to remove it manually."
+                    raise "ERROR: Manifest dir is not a copy managed by puppet-sync in: #{destination}. Try to remove it manually."
                 end
 
             else
-                raise "Error: Manifest dir is not writeable."
+                raise "ERROR: Manifest dir is not writeable."
             end
         end
 
         # move the new copy to destination
         execute << "mv #{@tmp} #{destination}"
 
+        execute.join(" && ")
+    end
+
+    def update_branch
+        git    = @options.gitcmd
+        branch = @options.branch
+        destination = translate_branch_to_dest_dir(@options.branch)
+
+        unless File.exists?("#{destination}/.puppet-sync-stamp")
+	    raise UpdateBranchDestinationDoesntExist, "Cannot update branch."
+        end
+
+        execute = []
+
+        execute << "cd #{destination}"
+
+        execute << "#{git} fetch #{@options.verbose}  && #{git} reset #{@options.verbose} --hard"
+
+        execute << "#{git} clean #{@options.verbose} -d -x -f"
+
+        execute << "touch .puppet-sync-stamp"
+
+        execute.join(" && ")
+    end
+
+
+    def finalize
+        execute = []
+
         if @options.passenger
             # touch the restart.txt to restart passenger workers
-            execute << "touch /usr/share/puppet/rack/puppetmasterd/tmp/restart.txt"
+            execute << "sudo touch /usr/share/puppet/rack/puppetmasterd/tmp/restart.txt"
         else
             # restart the puppet master daemon
             execute << "sudo /etc/init.d/puppetmaster restart"
@@ -151,7 +180,7 @@ class PuppetSync
         name = "#{@options.tmp}/puppetconf."
         10.times{name << ((rand(2)==1?65:97) + rand(25)).chr}
 
-        puts "| Temp: #{name}" if @options.verbose
+        puts "| Temp: #{name}" if @options.verbose == ""
 
         unless File.directory?(name)
             return name
@@ -203,7 +232,7 @@ class PuppetSync
 
         opts.separator "Common options:"
         opts.on('-V', '--version', 'Display the script version.') { output_version ; exit 0; }
-        opts.on('-v', '--verbose', 'Be more verbose.')  { @options.verbose = true  }
+        opts.on('-v', '--verbose', 'Be more verbose.')  { @options.verbose = ""  }
         opts.on_tail("-h", "--help", "Show this message") do
             puts opts
             exit
