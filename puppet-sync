@@ -47,7 +47,7 @@ class PuppetSync
         @options.branch = "master"
         @options.verbose = "-q"
         @options.passenger = false
-        @options.repository = "git+ssh://psync@git.in.ixolit.com/srv/git/puppet.git"
+        @options.repository = "git+ssh://psync@git/srv/git/puppet.git"
         @options.destination = "/etc/puppet/environments"
     end
 
