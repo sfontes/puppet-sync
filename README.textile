@@ -5,7 +5,7 @@ repository to your Puppet master.
 
 h2. Usage
 
-pre..
+<pre>
    puppet-sync -b BRANCH [options]
     -b, --branch BRANCH              Mandatory, specify the git branch to clone.
     -t, --tmp DIR                    Specify the temporary directory.
@@ -16,16 +16,16 @@ pre..
     -V, --version                    Display the script version.
     -v, --verbose                    Be more verbose.
     -h, --help                       Show this message
-p.
+</pre>
 
 To sync a specific branch, to specific location, from a specific repository run the
 script with the following arguments:
 
-pre..
+<pre>
   puppet-sync --branch master \
               --destination /etc/puppet/environments \
               --repository ssh+git://git/puppet.git
-p.
+</pre>
 
 h2. Git Hook
 
@@ -33,7 +33,7 @@ I usually call this script from a GIT hook. If your GIT repository is located
 on a different server as your Puppet master, you will need to ensure that
 a certain user can login to your Puppet server, without manual interactions.
 
-pre..
+<pre>
   # create a puppet-sync user
   useradd puppet-sync
 
@@ -46,15 +46,15 @@ pre..
   # copy the ssh key to your puppet master (where you have already
   # created the puppet-sync user too ;-))
   scp ~puppet-sync/.ssh/id_rsa.pub puppet:/home/puppet-sync/.ssh
-p.
+</pre>
 
 Now you need to add the following line to the Git hook file:
 
-pre..
+<pre>
    # /git/puppet.git/hooks/post-update
    #
    branch=`echo $1 | awk -F/ {'print $3'}`
    sudo -u puppet-sync ssh puppet /usr/local/bin/puppet-sync --branch \$branch -r ssh+git://git/puppet.git"
 
    exec git-update-server-info" >> /git/puppet.git/hooks/post-update
-p.
+</pre>
