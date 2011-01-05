@@ -34,7 +34,7 @@ class PuppetSync
     class UpdateBranchDestinationDoesntExist < StandardError
     end
 
-    VERSION = "1.1"
+    VERSION = "1.2"
 
     def initialize(arguments)
         @arguments = arguments
@@ -145,7 +145,7 @@ class PuppetSync
 
         execute << "cd #{destination}"
 
-        execute << "#{git} fetch #{@options.verbose}  && #{git} reset #{@options.verbose} --hard"
+        execute << "#{git} pull #{@options.verbose} origin #{branch}  && #{git} reset #{@options.verbose} --hard"
 
         execute << "#{git} clean #{@options.verbose} -d -x -f"
 
